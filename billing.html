@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能日常支出管理</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #667eea;
+            --primary-dark: #5a6fd6;
+            --accent: #764ba2;
+            --bg: #f3f4f6;
+            --text: #374151;
+            --text-light: #9ca3af;
+            --white: #ffffff;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        /* 顶部通栏 */
+        .header-card {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            color: var(--white);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.4);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header-info h1 { font-size: 24px; margin-bottom: 5px; }
+        .header-info p { opacity: 0.9; font-size: 14px; }
+
+        .month-selector {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            cursor: pointer;
+        }
+        
+        /* Dashboard 布局 */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--white);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+        
+        .card:hover { transform: translateY(-2px); }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-light);
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 统计数字 */
+        .stat-value { font-size: 32px; font-weight: 700; color: var(--text); }
+        .stat-sub { font-size: 13px; color: var(--text-light); margin-top: 5px; }
+        .stat-value.expense { color: var(--primary); }
+
+        /* 输入区域 */
+        .input-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            align-items: end;
+        }
+
+        .form-group label { display: block; font-size: 12px; color: var(--text-light); margin-bottom: 5px; font-weight: 500;}
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #f9fafb;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .form-control:focus { outline: none; border-color: var(--primary); background: white; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+        .btn-danger:hover { background: var(--danger); color: white; }
+        .btn-outline { background: transparent; border: 1px solid #e5e7eb; color: var(--text); }
+        .btn-outline:hover { background: #f3f4f6; }
+
+        /* 图表区域 */
+        .chart-container {
+            position: relative;
+            height: 250px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* 表格区域 */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .search-box {
+            flex: 1;
+            position: relative;
+        }
+        
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th { text-align: left; padding: 12px; color: var(--text-light); font-size: 12px; font-weight: 600; border-bottom: 1px solid #e5e7eb; }
+        td { padding: 12px; border-bottom: 1px solid #f3f4f6; font-size: 14px; color: var(--text); vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #f9fafb; }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .editable-cell {
+            cursor: pointer;
+            border-bottom: 1px dashed #cbd5e1;
+            transition: color 0.2s;
+        }
+        .editable-cell:hover { color: var(--primary); border-bottom-color: var(--primary); }
+        
+        .inline-input {
+            width: 100%;
+            padding: 4px;
+            border: 1px solid var(--primary);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .header-card { flex-direction: column; text-align: center; }
+            .input-form { grid-template-columns: 1fr 1fr; }
+            .input-form .form-group:last-child { grid-column: span 2; } /* 按钮独占一行 */
+            .btn { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-card">
+        <div class="header-info">
+            <h1>💰 支出管理 Pro</h1>
+            <p>掌控财务，理性消费</p>
+        </div>
+        <div>
+            <input type="month" id="monthFilter" class="month-selector" onchange="handleMonthChange()">
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+            <div class="card">
+                <div class="card-title">📝 快速记账</div>
+                <div class="input-form">
+                    <div class="form-group">
+                        <label>日期</label>
+                        <input type="date" id="dateInput" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>分类</label>
+                        <select id="categoryInput" class="form-control">
+                            <option value="餐饮">🍔 餐饮美食</option>
+                            <option value="交通">🚗 交通出行</option>
+                            <option value="购物">🛍️ 购物消费</option>
+                            <option value="娱乐">🎮 休闲娱乐</option>
+                            <option value="居家">🏡 居家生活</option>
+                            <option value="医疗">💊 医疗健康</option>
+                            <option value="学习">📚 学习提升</option>
+                            <option value="其他">📦 其他支出</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>金额 (¥)</label>
+                        <input type="number" id="amountInput" class="form-control" step="0.01" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label>备注</label>
+                        <input type="text" id="noteInput" class="form-control" placeholder="如：请客、超市...">
+                    </div>
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary" onclick="addExpense()">+ 记一笔</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-grid" style="gap: 15px;">
+                <div class="card" style="padding: 20px;">
+                    <div class="card-title">本月支出</div>
+                    <div class="stat-value expense" id="monthTotal">¥0.00</div>
+                    <div class="stat-sub" id="recordCount">共 0 笔</div>
+                </div>
+                <div class="card" style="padding: 20px;">
+                    <div class="card-title">今日支出</div>
+                    <div class="stat-value" id="todayTotal">¥0.00</div>
+                    <div class="stat-sub">实时统计</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <span>📊 消费构成</span>
+                <span class="badge" style="background:#f3f4f6; color:#666" id="chartMonthLabel">本月</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="expenseChart"></canvas>
+            </div>
+            <div id="noChartData" style="display:none; text-align:center; padding-top:40px; color:#999;">本月暂无数据</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">
+            <span>📜 账单明细</span>
+            <div class="toolbar">
+                <input type="text" id="searchInput" class="form-control" placeholder="🔍 搜索备注或金额..." onkeyup="filterTable()">
+                <button class="btn btn-outline" onclick="exportExcel()">导出Excel</button>
+                <button class="btn btn-danger" onclick="clearAll()" style="padding: 8px 12px;">🗑️</button>
+            </div>
+        </div>
+        
+        <div class="table-responsive">
+            <table>
+                <thead>
+                <tr>
+                    <th width="15%">日期</th>
+                    <th width="15%">分类</th>
+                    <th width="15%">金额</th>
+                    <th width="40%">备注</th>
+                    <th width="15%">操作</th>
+                </tr>
+                </thead>
+                <tbody id="expenseTable">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script>
+    // ====== 配置与初始化 ======
+    const STORAGE_KEY = 'expenses_pro_v2';
+    // 颜色配置
+    const catColors = {
+        '餐饮': '#ff6b6b', '交通': '#4ecdc4', '购物': '#ff9f43',
+        '娱乐': '#a55eea', '居家': '#54a0ff', '医疗': '#ff7675',
+        '学习': '#2ecc71', '其他': '#a4b0be'
+    };
+    
+    let expenses = loadExpenses();
+    let expenseChart = null;
+    let editingCell = null;
+
+    // 初始化：设置默认月份为当前月
+    const today = new Date();
+    const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+    document.getElementById('monthFilter').value = currentMonthStr;
+    document.getElementById('dateInput').value = today.toISOString().split('T')[0];
+
+    // ====== 核心逻辑 ======
+    function loadExpenses() {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    }
+
+    function saveExpenses() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+        refreshUI();
+    }
+
+    // 主刷新函数：当数据变动或月份筛选变动时调用
+    function refreshUI() {
+        const selectedMonth = document.getElementById('monthFilter').value;
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+        // 1. 过滤数据
+        const filteredData = expenses.filter(item => {
+            const matchMonth = item.date.startsWith(selectedMonth);
+            const matchSearch = item.note.toLowerCase().includes(searchTerm) || 
+                                item.amount.toString().includes(searchTerm) ||
+                                item.category.includes(searchTerm);
+            return matchMonth && matchSearch;
+        });
+
+        // 按日期降序排序
+        filteredData.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // 2. 渲染表格
+        renderTable(filteredData);
+        
+        // 3. 计算统计 & 渲染图表 (基于选中月份的所有数据，受搜索框影响较小，通常图表看全量)
+        // 注意：如果你希望图表也随搜索变动，就把 filteredData 传进去。这里我让图表只受“月份”影响。
+        const monthData = expenses.filter(item => item.date.startsWith(selectedMonth));
+        updateStats(monthData);
+        renderChart(monthData);
+    }
+
+    // 添加支出
+    function addExpense() {
+        const date = document.getElementById('dateInput').value;
+        const category = document.getElementById('categoryInput').value;
+        const amount = parseFloat(document.getElementById('amountInput').value);
+        const note = document.getElementById('noteInput').value;
+
+        if (!date || isNaN(amount) || amount <= 0) {
+            alert('请填写正确的日期和金额！');
+            return;
+        }
+
+        expenses.unshift({
+            id: Date.now(),
+            date, category, amount, note
+        });
+
+        saveExpenses();
+        // 重置金额和备注，保留日期方便连续记账
+        document.getElementById('amountInput').value = '';
+        document.getElementById('noteInput').value = '';
+        document.getElementById('amountInput').focus();
+    }
+
+    // 删除支出
+    function deleteExpense(id) {
+        if(confirm('确定删除这条记录吗？')) {
+            expenses = expenses.filter(e => e.id !== id);
+            saveExpenses();
+        }
+    }
+
+    // 清空数据
+    function clearAll() {
+        if(confirm('警告：此操作将清空所有历史数据，且不可恢复！确定吗？')) {
+            expenses = [];
+            saveExpenses();
+        }
+    }
+
+    // ====== 渲染逻辑 ======
+    function renderTable(data) {
+        const tbody = document.getElementById('expenseTable');
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:#999">👻 本月没有相关记录</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.map(item => `
+            <tr>
+                <td>${item.date.slice(5)}</td>
+                <td><span class="badge" style="background:${catColors[item.category]}20; color:${catColors[item.category]}">${item.category}</span></td>
+                <td class="editable-cell" onclick="editCell(${item.id}, 'amount')" style="font-weight:bold; color:${catColors[item.category]}">
+                    ¥${item.amount.toFixed(2)}
+                </td>
+                <td class="editable-cell" onclick="editCell(${item.id}, 'note')">
+                    ${item.note || '<span style="color:#ddd">无备注</span>'}
+                </td>
+                <td>
+                    <button class="btn btn-outline" style="padding:4px 8px; font-size:12px; color:#ef4444; border-color:#fee2e2" onclick="deleteExpense(${item.id})">删除</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function updateStats(data) {
+        const total = data.reduce((sum, item) => sum + item.amount, 0);
+        document.getElementById('monthTotal').textContent = `¥${total.toFixed(2)}`;
+        document.getElementById('recordCount').textContent = `本月共 ${data.length} 笔`;
+
+        // 今日支出
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todaySum = expenses.filter(e => e.date === todayStr).reduce((sum, e) => sum + e.amount, 0);
+        document.getElementById('todayTotal').textContent = `¥${todaySum.toFixed(2)}`;
+    }
+
+    // ====== 图表逻辑 (Chart.js) ======
+    function renderChart(data) {
+        const ctx = document.getElementById('expenseChart').getContext('2d');
+        const noDataEl = document.getElementById('noChartData');
+        const chartEl = document.querySelector('.chart-container canvas');
+
+        if (data.length === 0) {
+            chartEl.style.display = 'none';
+            noDataEl.style.display = 'block';
+            return;
+        } else {
+            chartEl.style.display = 'block';
+            noDataEl.style.display = 'none';
+        }
+
+        // 聚合数据
+        const catMap = {};
+        data.forEach(item => {
+            catMap[item.category] = (catMap[item.category] || 0) + item.amount;
+        });
+
+        const labels = Object.keys(catMap);
+        const values = Object.values(catMap);
+        const bgColors = labels.map(l => catColors[l] || '#ccc');
+
+        if (expenseChart) {
+            expenseChart.destroy(); // 销毁旧图表
+        }
+
+        expenseChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: bgColors,
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { boxWidth: 12, font: {size: 11} } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const val = context.raw;
+                                const total = context.chart._metasets[context.datasetIndex].total;
+                                const percent = ((val / total) * 100).toFixed(1) + '%';
+                                return ` ${context.label}: ¥${val} (${percent})`;
+                            }
+                        }
+                    }
+                },
+                cutout: '65%' // 甜甜圈厚度
+            }
+        });
+    }
+
+    // ====== 交互逻辑 ======
+    function handleMonthChange() {
+        document.getElementById('chartMonthLabel').textContent = document.getElementById('monthFilter').value;
+        refreshUI();
+    }
+
+    function filterTable() {
+        refreshUI(); // 复用刷新逻辑，因为里面包含了搜索词获取
+    }
+
+    // 行内编辑功能
+    function editCell(id, field) {
+        if (editingCell) return; // 防止重复点击
+        
+        const item = expenses.find(e => e.id === id);
+        if (!item) return;
+
+        // 找到点击的TD元素（这里简化处理，通过重绘来定位有点笨，但稳健）
+        // 实际上因为 renderTable 每次重绘，直接操作 DOM 比较复杂，
+        // 这里我们用最简单的 prompt 来替代复杂的 DOM 替换，或者用更优雅的 inline input 替换
+        
+        // 为了更好的体验，我们使用 DOM 替换法
+        // 重新渲染表格，但把特定行标记为编辑态 (简单起见，这里演示 Prompt 方式，如果需要完全 inline 比较多代码)
+        // 为了不破坏你要求的简洁性，我们用 Prompt，但做一点优化
+        
+        let newValue;
+        if (field === 'amount') {
+            const val = prompt("修改金额:", item.amount);
+            if (val === null) return;
+            newValue = parseFloat(val);
+            if (isNaN(newValue) || newValue <= 0) { alert("无效金额"); return; }
+        } else {
+            const val = prompt("修改备注:", item.note);
+            if (val === null) return;
+            newValue = val;
+        }
+
+        // 更新数据
+        item[field] = newValue;
+        saveExpenses();
+    }
+
+    // ====== 导出 Excel ======
+    function exportExcel() {
+        if (!expenses.length) return alert('没有数据可导出');
+        
+        const ws = XLSX.utils.json_to_sheet(expenses.map(e => ({
+            "日期": e.date,
+            "分类": e.category,
+            "金额": e.amount,
+            "备注": e.note
+        })));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "支出记录");
+        XLSX.writeFile(wb, `支出报表_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    // 启动
+    refreshUI();
+
+</script>
+</body>
+</html>
